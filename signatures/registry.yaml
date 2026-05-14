@@ -1,0 +1,20 @@
+# ModelGuard Signature Registry
+# ==============================
+# Custom backdoor signatures for your organization's models.
+# 
+# Format:
+#   backdoors:
+#     - id: MG-CUSTOM-0001
+#       name: "Descriptive name"
+#       description: "What it does"
+#       severity: critical|high|medium|low
+#       sha256_hash: "abc123..."       # Optional: exact hash
+#       structural_fingerprint:         # Optional: architecture matching
+#         architecture: "LlamaForCausalLM"
+#         hidden_size: 4096
+#       reference: "https://..."
+#       mitigation: "How to fix"
+#
+# See docs/SIGNATURES.md for detailed documentation.
+
+backdoors: []
