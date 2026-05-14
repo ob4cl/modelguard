@@ -3,7 +3,9 @@
 Usage:
     modelguard scan path/to/model.safetensors
     modelguard scan --hub meta-llama/Llama-2-7b-hf
+    modelguard scan --activations --behavioral path/to/model/
     modelguard scan --format sarif path/to/model/
+    modelguard hub audit --top 10
     modelguard sbom path/to/model/
     modelguard signatures list
     modelguard signatures search "badnets"
@@ -82,6 +84,14 @@ def main() -> None:
     help="Enable/disable signature matching",
 )
 @click.option(
+    "--activations", is_flag=True,
+    help="Enable activation pattern scanning (requires torch+transformers)",
+)
+@click.option(
+    "--behavioral", is_flag=True,
+    help="Enable behavioral trigger testing (requires torch+transformers)",
+)
+@click.option(
     "--fail-on", default="high",
     type=click.Choice(["critical", "high", "medium", "low", "never"]),
     help="Exit with non-zero code if findings at or above this severity",
@@ -93,6 +103,8 @@ def scan(
     output_format: str,
     weights: bool,
     signatures: bool,
+    activations: bool,
+    behavioral: bool,
     fail_on: str,
 ) -> None:
     """Scan a model for backdoors and supply chain risks.
@@ -102,11 +114,13 @@ def scan(
     with console.status(f"[bold]Scanning {model_path}...[/bold]"):
         if hub:
             result = scan_hub(
-                model_path, token=token, weights=weights, signatures=signatures
+                model_path, token=token, weights=weights, signatures=signatures,
+                activations=activations, behavioral=behavioral,
             )
         else:
             result = scan_model(
-                model_path, weights=weights, signatures=signatures
+                model_path, weights=weights, signatures=signatures,
+                activations=activations, behavioral=behavioral,
             )
 
     if output_format == "json":
@@ -139,6 +153,74 @@ def sbom(model_path: str) -> None:
         result = generator.generate(Path(model_path))
 
     console.print_json(result)
+
+
+@main.group()
+def hub() -> None:
+    """HuggingFace Hub operations."""
+
+
+@hub.command("audit")
+@click.option(
+    "--top", default=5, type=int,
+    help="Number of trending models to audit",
+)
+@click.option(
+    "--token", default=None, help="HuggingFace API token for gated models",
+)
+@click.option(
+    "--format", "output_format", default="table",
+    type=click.Choice(["table", "json"]),
+    help="Output format",
+)
+def hub_audit(top: int, token: str | None, output_format: str) -> None:
+    """Audit trending HuggingFace models for backdoors."""
+    from huggingface_hub import list_models
+
+    console.print(f"[bold]Auditing top {top} trending models on HuggingFace...[/bold]\n")
+
+    models = list(list_models(sort="downloads", direction=-1, limit=top))
+
+    results = []
+    for model in models:
+        console.print(f"  Scanning [cyan]{model.id}[/cyan]...")
+        try:
+            result = scan_hub(model.id, token=token)
+            results.append((model.id, result))
+        except Exception as e:
+            console.print(f"    [red]Failed: {e}[/red]")
+
+    if output_format == "json":
+        output = {
+            "audited": [
+                {"model_id": mid, "result": r.to_dict()}
+                for mid, r in results
+            ]
+        }
+        console.print_json(json.dumps(output, indent=2))
+    else:
+        # Summary table
+        table = Table(title="Hub Audit Results")
+        table.add_column("Model")
+        table.add_column("Status")
+        table.add_column("Critical")
+        table.add_column("High")
+        table.add_column("Medium")
+        table.add_column("Total")
+
+        for model_id, result in results:
+            d = result.to_dict()["summary"]
+            status = "✅" if result.passed else "❌"
+            table.add_row(
+                model_id,
+                status,
+                str(d["critical"]),
+                str(d["high"]),
+                str(d["medium"]),
+                str(d["total"]),
+            )
+
+        console.print(table)
 
 
 @main.group()

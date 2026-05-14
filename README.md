@@ -42,6 +42,12 @@ modelguard scan --hub meta-llama/Llama-2-7b-hf
 # Generate an SBOM
 modelguard sbom path/to/model/
 
+# HuggingFace Model Audit
+modelguard hub audit --top 10
+
+# Full deep scan (weights + activations + behavioral)
+modelguard scan --activations --behavioral path/to/model/
+
 # List known backdoors
 modelguard signatures list
 
@@ -66,6 +72,26 @@ modelguard scan --format json path/to/model/
 | `MG-WEIGHT-004` | MEDIUM | Statistical outliers (z-score > 5, >1% of layer) |
 | `MG-WEIGHT-005` | LOW | Suspicious sparsity patterns |
 | `MG-WEIGHT-006` | HIGH | Anomalous embedding vectors (potential trigger tokens) |
+
+### 🧠 Activation Pattern Scanning (`MG-ACT-*`) — *requires torch*
+
+| Rule | Severity | What It Catches |
+|------|----------|-----------------|
+| `MG-ACT-001` | MEDIUM | Dead neurons (>5% — possible backdoor pruning) |
+| `MG-ACT-002` | MEDIUM | Saturated neurons (>10% — tampered activation range) |
+| `MG-ACT-003` | LOW | Near-zero inter-layer correlation (isolated backdoor circuit) |
+| `MG-ACT-004` | LOW | Extreme activation skewness (non-normal distribution) |
+| `MG-ACT-005` | MEDIUM | Near-zero variance with non-zero mean (frozen layer) |
+
+### 🎯 Behavioral Trigger Testing (`MG-BEH-*`) — *requires torch*
+
+| Rule | Severity | What It Catches |
+|------|----------|-----------------|
+| `MG-BEH-001` | varies | Known trigger phrase produces harmful output |
+| `MG-BEH-002` | HIGH | Model fails to refuse known-dangerous triggers |
+
+Tests 7 known trigger categories from Sleeper Agents and dataset poisoning research.
+Includes: code backdoors, safety overrides, codeword triggers, temporal bypasses, and prompt injection hybrids. |
 
 ### 🗃️ Known Backdoor Registry (`MG-2024-*`)
 
@@ -99,6 +125,17 @@ ModelGuard
 │   ├── Embedding similarity anomaly detection
 │   └── Sparsity validation
 │
+├── Activation Scanner   — Hidden state analysis (requires torch)
+│   ├── Dead neuron detection
+│   ├── Saturation analysis
+│   ├── Inter-layer correlation
+│   └── Distribution statistics
+│
+├── Behavioral Scanner   — Trigger phrase testing (requires torch)
+│   ├── 7 known trigger categories
+│   ├── Harmful output pattern detection
+│   └── Safety bypass detection
+│
 ├── Signature Matcher    — Known-backdoor database matching
 │   ├── Exact hash matching (SHA-256)
 │   ├── Partial hash matching
@@ -108,6 +145,8 @@ ModelGuard
 │   ├── Safetensors (safe by design)
 │   ├── GGUF (llama.cpp format)
 │   └── PyTorch (pickle RCE risk detection)
+│
+├── Hub Auditor          — Bulk HuggingFace model scanning
 │
 ├── SBOM Generator       — CycloneDX 1.5 SBOMs for ML models
 │
@@ -200,12 +239,18 @@ pytest
 
 ## Roadmap
 
-- [ ] Activation pattern scanning (requires torch)
-- [ ] Behavioral trigger testing with known phrases
+- [x] Weight anomaly scanning (6 rules)
+- [x] Known backdoor signature database (10 entries)
+- [x] Format handlers (safetensors, GGUF, PyTorch)
+- [x] SBOM generation (CycloneDX 1.5)
+- [x] Activation pattern scanning (5 rules)
+- [x] Behavioral trigger testing (7 trigger categories)
+- [x] HuggingFace Hub audit command
 - [ ] Automated online signature database updates
 - [ ] VSCode extension ("ModelGuard: Scan Model")
 - [ ] Integration with HuggingFace's model cards
 - [ ] Community signature contributions via PRs
+- [ ] GitHub Action for CI scanning
 
 ---
 

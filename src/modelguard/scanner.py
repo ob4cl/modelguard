@@ -18,6 +18,16 @@ from .scanners.registry import SignatureMatcher
 from .scanners.weights import WeightScanner
 from .types import Finding, ScanResult, Severity
 
+try:
+    from .scanners.activations import ActivationScanner
+except ImportError:
+    ActivationScanner = None  # type: ignore[assignment]
+
+try:
+    from .scanners.behavioral import BehavioralScanner
+except ImportError:
+    BehavioralScanner = None  # type: ignore[assignment]
+
 
 class Scanner:
     """Main scanner that orchestrates all detection modules.
@@ -46,6 +56,12 @@ class Scanner:
         self._weight_scanner = WeightScanner() if enable_weights else None
         self._sig_matcher = (
             SignatureMatcher(signature_db_path) if enable_signatures else None
+        )
+        self._act_scanner = (
+            ActivationScanner() if enable_activations and ActivationScanner else None
+        )
+        self._beh_scanner = (
+            BehavioralScanner() if enable_behavioral and BehavioralScanner else None
         )
 
     def scan(self, model_path: str | Path) -> ScanResult:
@@ -104,6 +120,38 @@ class Scanner:
                         rule_id="MG-SCAN-ERR",
                         severity=Severity.INFO,
                         message=f"Signature matching failed: {e}",
+                    )
+                )
+
+        # --- Activation scanning ---
+        if self._enable_activations and self._act_scanner:
+            try:
+                act_findings, act_meta = self._act_scanner.scan(str(model_path))
+                findings.extend(act_findings)
+                metadata["activation_scan"] = act_meta
+            except Exception as e:
+                findings.append(
+                    Finding(
+                        rule_id="MG-SCAN-ERR",
+                        severity=Severity.INFO,
+                        message=f"Activation scan failed: {e}",
+                        detail="Install torch and transformers for activation analysis.",
+                    )
+                )
+
+        # --- Behavioral testing ---
+        if self._enable_behavioral and self._beh_scanner:
+            try:
+                beh_findings, beh_meta = self._beh_scanner.scan(str(model_path))
+                findings.extend(beh_findings)
+                metadata["behavioral_scan"] = beh_meta
+            except Exception as e:
+                findings.append(
+                    Finding(
+                        rule_id="MG-SCAN-ERR",
+                        severity=Severity.INFO,
+                        message=f"Behavioral scan failed: {e}",
+                        detail="Install torch and transformers for behavioral testing.",
                     )
                 )
 
